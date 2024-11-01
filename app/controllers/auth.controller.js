@@ -1,5 +1,6 @@
 const db = require("../models");
 const config = require("../config/auth.config");
+const smsService = require('../services/sms.service');
 const User = db.user;
 const Role = db.role;
 
@@ -9,6 +10,7 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 
 exports.signup = async (req, res) => {
+  const { phone } = req.body;
   // Save User to Database
   try {
     const user = await User.create({
@@ -16,6 +18,11 @@ exports.signup = async (req, res) => {
       email: req.body.email,
       password: bcrypt.hashSync(req.body.password, 8),
     });
+
+    const verificationCode = Math.floor(100000 + Math.random() * 900000); // Generate a random 6-digit code
+    await smsService.sendSMS(phone, `Your verification code is: ${verificationCode}`);
+   // Optionally, store the verification code in the database for later validation
+    // e.g., await VerificationCode.create({ userId: user.id, code: verificationCode });
 
     if (req.body.roles) {
       const roles = await Role.findAll({
@@ -94,5 +101,21 @@ exports.signout = async (req, res) => {
     });
   } catch (err) {
     this.next(err);
+  }
+};
+
+exports.verifySMS = async (req, res) => {
+  const { userId, code } = req.body;
+
+  // Fetch the stored verification code from the database
+  // const verificationRecord = await VerificationCode.findOne({ where: { userId } });
+
+  // Assuming verificationRecord exists and we compare the codes
+  if (verificationRecord && verificationRecord.code === code) {
+    // Verification successful
+    res.status(200).send({ message: "Phone number verified successfully!" });
+  } else {
+    // Verification failed
+    res.status(400).send({ message: "Invalid verification code." });
   }
 };
