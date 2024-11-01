@@ -5,6 +5,8 @@ const mysql = require("mysql2/promise");
 const config = require("./app/config/db.config.js");
 
 const app = express();
+const userRoutes = require("./app/routes/user.routes.js");
+const authRoutes = require("./app/routes/auth.routes.js");
 
 app.use(cors());
 app.use(express.json());
@@ -51,28 +53,31 @@ createDatabaseIfNotExists().then(() => {
 
 // Function to seed initial data
 async function initial() {
-    try {
-      // Check if roles already exist in the table
-      const count = await Role.count();
-      
-      if (count === 0) {
-        // Only insert roles if they don't exist yet
-        await Role.create({ id: 1, name: "user" });
-        await Role.create({ id: 2, name: "admin" });
-        console.log("Initial roles added to the database.");
-      } else {
-        console.log("Roles already exist in the database, skipping initialization.");
-      }
-    } catch (error) {
-      console.error("Error initializing roles:", error);
+  try {
+    // Check if roles already exist in the table
+    const count = await Role.count();
+
+    if (count === 0) {
+      // Only insert roles if they don't exist yet
+      await Role.create({ id: 1, name: "user" });
+      await Role.create({ id: 2, name: "admin" });
+      console.log("Initial roles added to the database.");
+    } else {
+      console.log(
+        "Roles already exist in the database, skipping initialization."
+      );
     }
+  } catch (error) {
+    console.error("Error initializing roles:", error);
   }
+}
 
 // Simple route
 app.get("/", (req, res) => {
   res.json({ message: "Welcome to the application." });
 });
-
+userRoutes(app);
+authRoutes(app);
 // Set port, listen for requests
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
