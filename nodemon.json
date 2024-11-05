@@ -1,0 +1,5 @@
+{
+  "watch": ["app", "config"],
+  "ext": "js,json",
+  "ignore": ["node_modules"]
+}

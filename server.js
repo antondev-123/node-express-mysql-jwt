@@ -1,68 +1,85 @@
-var express = require('express');
-var path = require('path');
-var cookieParser = require('cookie-parser');
-var logger = require('morgan');
-var createError = require('http-errors');
+const express = require("express");
+const cors = require("cors");
+const cookieSession = require("cookie-session");
+const mysql = require("mysql2/promise");
+const config = require("./app/config/db.config.js");
 
-var authRouter = require('./routes/auth');
-var usersRouter = require('./routes/users');
-var cors = require("cors");
-const jwt = require("jsonwebtoken");
-
-var app = express();
-const swaggerUi = require("swagger-ui-express");
-const swaggerJsDoc = require("swagger-jsdoc");
-
-const swaggerOptions = {
-  swaggerDefinition: {
-    info: {
-      title: "Library API",
-      version: "1.0.0",
-    },
-  },
-  apis: ["./routes/users.js", "./routes/auth.js"],
-};
-
-const swaggerDocs = swaggerJsDoc(swaggerOptions);
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
+const app = express();
+const userRoutes = require("./app/routes/user.routes.js");
+const authRoutes = require("./app/routes/auth.routes.js");
 
 app.use(cors());
-app.use(logger('dev'));
 app.use(express.json());
-app.use(express.urlencoded({extended: false}));
-app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.urlencoded({ extended: true }));
 
-app.use('/auth', authRouter);
-app.use('/users', jwtVerify, usersRouter);
+app.use(
+  cookieSession({
+    name: "bezkoder-session",
+    keys: ["COOKIE_SECRET"], // should use as secret environment variable
+    httpOnly: true,
+  })
+);
 
-app.use(function (req, res, next) {
-    next(createError(404));
-});
+const db = require("./app/models");
+const Role = db.role;
 
-function jwtVerify(req, res, next) {
-    console.log('verifying token...');
+// Function to check if database exists, and create it if it doesn't
+async function createDatabaseIfNotExists() {
+  // Connect to MySQL without specifying the database
+  const connection = await mysql.createConnection({
+    host: config.HOST,
+    user: config.USER,
+    password: config.PASSWORD,
+  });
 
-    if (req.headers.authorization) {
-        const token = req.headers.authorization.split(' ')[1]; // Bearer <token>
-        try {
-            result = jwt.verify(token, 'httpskedar');
-            req.decoded = result;
-            next();
-        } catch (err) {
-            result = {
-                error: `Unauthorized`,
-                status: 401
-            };
-            res.status(401).send(result);
-        }
-    } else {
-        result = {
-            error: `Unauthorized error. Token required.`,
-            status: 401
-        };
-        res.status(401).send(result);
-    }
+  // Check if database exists, create it if not
+  await connection.query(`CREATE DATABASE IF NOT EXISTS ${config.DB}`);
+  await connection.end();
 }
 
-module.exports = app;
+createDatabaseIfNotExists().then(() => {
+  // Connect to the database after ensuring it exists
+  db.sequelize
+    .sync({ force: false })
+    .then(() => {
+      // Use force: false to prevent data loss
+      console.log("Database synchronized successfully.");
+      initial(); // Call initial function to set up initial data, if needed
+    })
+    .catch((err) => {
+      console.error("Failed to sync database:", err);
+    });
+});
+
+// Function to seed initial data
+async function initial() {
+  try {
+    // Check if roles already exist in the table
+    const count = await Role.count();
+
+    if (count === 0) {
+      // Only insert roles if they don't exist yet
+      await Role.create({ id: 1, name: "user" });
+      await Role.create({ id: 2, name: "admin" });
+      console.log("Initial roles added to the database.");
+    } else {
+      console.log(
+        "Roles already exist in the database, skipping initialization."
+      );
+    }
+  } catch (error) {
+    console.error("Error initializing roles:", error);
+  }
+}
+
+// Simple route
+app.get("/", (req, res) => {
+  res.json({ message: "Welcome to the application." });
+});
+userRoutes(app);
+authRoutes(app);
+// Set port, listen for requests
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}.`);
+});
